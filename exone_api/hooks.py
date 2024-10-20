@@ -123,9 +123,9 @@ app_license = "mit"
 # Hook on document methods and events
 
 doc_events = {
-    "Sales Invoice": {
-        "on_submit": "exone_api.api.save_sales_invoice"
-    }
+    # "Sales Invoice": {
+    #     "on_submit": "exone_api.api.save_sales_invoice"
+    # }
 	# "*": {
 	# 	"on_update": "method",
 	# 	"on_cancel": "method",
@@ -169,11 +169,11 @@ doc_events = {
 # 	"frappe.desk.doctype.event.event.get_events": "exone_api.event.get_events"
 # }
 
-override_whitelisted_methods = {
-    "frappe.core.doctype.user.user.login": "exone_api.api.login",
-    "frappe.desk.reportview.get_customers": "exone_api.api.get_customers",
-    "frappe.desk.reportview.get_items": "exone_api.api.get_items",
-}
+# override_whitelisted_methods = {
+#     "frappe.core.doctype.user.user.login": "exone_api.api.login",
+#     "frappe.desk.reportview.get_customers": "exone_api.api.get_customers",
+#     "frappe.desk.reportview.get_items": "exone_api.api.get_items",
+# }
 
 # each overriding function accepts a `data` argument;
 # generated from the base implementation of the doctype dashboard,
