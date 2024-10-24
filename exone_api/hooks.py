@@ -125,6 +125,7 @@ app_license = "mit"
 doc_events = {
     # "Sales Invoice": {
     #     "on_submit": "exone_api.api.save_sales_invoice"
+		
     # }
 	# "*": {
 	# 	"on_update": "method",

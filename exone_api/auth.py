@@ -26,11 +26,52 @@ def authenticate():
 			return {"success": False, "message": "Invalid username or password"}
 
 		login_manager.post_login()
+		user = frappe.session.user
+		user_details = frappe.db.get_value(
+			"User", user, 
+			["email", "first_name", "last_name", "full_name", "mobile_no", "user_type", "enabled"], as_dict=True
+		)
 
+		applicable_pos_profiles = frappe.db.get_all(
+            'POS Profile User',
+            filters={'user': user},
+            fields=['parent']
+        )
+
+        # If there are no applicable POS profiles, return an empty list
+		if not applicable_pos_profiles:
+			return {
+                'pos_profiles': []
+            }
+
+        # Extract the POS profile names
+		pos_profile_names = [profile['parent'] for profile in applicable_pos_profiles]	
+		pos_profiles = frappe.db.get_all(
+            'POS Profile',
+            filters={'name': ['in', pos_profile_names]},
+            fields=['name', 'company', 'currency', 'warehouse', 'cost_center', 'write_off_account'],
+            order_by='name'
+        )
+		for profile in pos_profiles:
+            # Fetch Applicable Users for each POS Profile
+			profile['applicable_users'] = frappe.db.get_all(
+                'POS Profile User',
+                filters={'parent': profile['name']},
+                fields=['user']
+            )
+
+            # Fetch Payment Methods for each POS Profile
+			profile['payment_methods'] = frappe.db.get_all(
+                'POS Payment Method',
+                filters={'parent': profile['name']},
+                fields=['mode_of_payment']
+            )
 		return {
 			"success": True,
 			"message": "Logged in succesfully",
 			"token": generate_keys(username),
+			'user_details':user_details,
+			"pos_profile_details":pos_profiles
 		}
 	except Exception as e:
 		frappe.log_error(str(e), "Auth Error")

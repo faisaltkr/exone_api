@@ -69,85 +69,90 @@ def fetch_item_groups():
 
 @frappe.whitelist(allow_guest=False)
 def get_items_with_tax_template():
-    try:
-        # Fetch item details in one query
-        items = frappe.get_all('Item', 
-                               fields=['name', 'item_code', 'item_name', 'description', 'standard_rate', 
-                                       'stock_uom', 'is_stock_item', 'image', 'item_name_arabic', 'item_group'])
-        item_codes = [item['item_code'] for item in items]
-
-        # Fetch tax templates and organize by item_tax_template for quick lookup
-        item_tax_templates = frappe.get_all('Item Tax Template Detail', 
-                                            fields=['parent AS item_tax_template', 'tax_type', 'tax_rate'])
-        tax_template_dict = {}
-        for template in item_tax_templates:
-            tax_template_dict.setdefault(template['item_tax_template'], []).append({
+	try:
+        # Fetch item details, including the 'item_tax_template' field
+		items = frappe.get_all('Item', 
+                               fields=['name','item_code', 'item_name', 'description','standard_rate', 'stock_uom', 'is_stock_item','image','item_name_arabic','item_group'])
+		item_tax_templates = frappe.get_all('Item Tax Template Detail',fields=['parent AS item_tax_template', 'tax_type', 'tax_rate'])
+		stock_counts = frappe.get_all('Bin', fields=['item_code', 'actual_qty'], filters={'item_code': ['in', [item['item_code'] for item in items]]})
+		stock_count_dict = {stock['item_code']: stock['actual_qty'] for stock in stock_counts}
+		tax_template_dict = {}
+		for template in item_tax_templates:
+			print(template,"template")
+			if template['item_tax_template'] not in tax_template_dict:
+				tax_template_dict[template['item_tax_template']] = []
+			tax_template_dict[template['item_tax_template']].append({
                 'tax_type': template['tax_type'],
                 'tax_rate': template['tax_rate']
             })
+		item_prices = frappe.get_all('Item Price',
+                                     fields=['item_code', 'price_list_rate'],
+                                     filters={'item_code': ['in', [item['item_code'] for item in items]]})
+		item_lookup = {item_prices['item_code']: item_prices['price_list_rate'] for item_prices in item_prices}
+		# item_group_tax_template = frappe.get_all('Item Group',
+        #                                              fields=['name'])
+		# for i in item_group_tax_template:
+		# 	item_group_taxes = frappe.db.get_all(
+		# 		'Item Tax Template Detail',
+		# 		filters={'parent': i['name']},  # Parent is the Item Group name
+		# 		fields=['tax_type', 'tax_rate']
+		# 	)
+		# 	print(item_group_taxes,"sdssdsdssd")
+		item_groups = frappe.get_all('Item Group', fields=['name'])
+		group_tax = {}
+		for group in item_groups:
+	# Get the Item Tax Template assigned to the Item Group
+			item_group_tax_templates = frappe.db.get_all(
+				'Item Tax',
+				filters={'parent': group['name']},  # Assuming 'parent' links the Item Group to the Item Tax table
+				fields=['item_tax_template']
+			)
 
-        # Fetch stock counts and organize by item_code
-        stock_counts = frappe.get_all('Bin', fields=['item_code', 'actual_qty'], filters={'item_code': ['in', item_codes]})
-        stock_count_dict = {stock['item_code']: stock['actual_qty'] for stock in stock_counts}
+			if item_group_tax_templates:
+				for template in item_group_tax_templates:
+					# Get the details of the tax for the template
+					item_group_taxes = frappe.db.get_all(
+						'Item Tax Template Detail',
+						filters={'parent': template['item_tax_template']},
+						fields=['tax_type', 'tax_rate']
+					)
+					group_tax[group['name']] = item_group_taxes[0]
 
-        # Fetch barcodes and organize by item with additional price data (price will be added in the next step)
-        barcodes = frappe.get_all('Item Barcode', fields=['parent', 'barcode', 'barcode_type', 'uom'])
-        barcode_dict = {}
-        for barcode in barcodes:
-            barcode_dict.setdefault(barcode['parent'], []).append({
-                'barcode': barcode['barcode'],
-                'barcode_type': barcode['barcode_type'],
-                'uom': barcode['uom'],
-                'price': None  # Initialize as None to update with price later
-            })
+			else:
+				group_tax[group['name']] = []
+		print(group_tax)
+		for item in items:
 
-        # Fetch item prices and create a lookup by item_code and uom
-        item_prices = frappe.get_all('Item Price', fields=['item_code', 'price_list_rate', 'uom'], filters={'item_code': ['in', item_codes]})
-        price_lookup = {}
-        for item_price in item_prices:
-            price_lookup.setdefault(item_price['item_code'], {})[item_price['uom']] = item_price['price_list_rate']
+			# print(item_group_tax_template)
+			# if item_group_tax_template and item_group_tax_template[0].get('item_tax_template'):
+			# 	item['taxes'] = tax_template_dict.get(item_group_tax_template[0]['item_tax_template'], [])
+			# 	print(item['taxes'],"ddddd")
+			# else:
+			# 	tax_type = frappe.get_all('Item Tax', filters={'parent': item['item_code']}, fields=['item_tax_template'])
+			# 	if tax_type:
+			# 		item['taxes'] = tax_template_dict.get(tax_type[0]['item_tax_template'], [])
+			# 	else:
+					# item['taxes'] = []  # No taxes found
 
-        # Fetch item groups and tax details for item groups
-        item_groups = frappe.get_all('Item Group', fields=['name'])
-        group_tax = {}
-        for group in item_groups:
-            item_group_tax_templates = frappe.db.get_all(
-                'Item Tax', filters={'parent': group['name']}, fields=['item_tax_template']
-            )
-            if item_group_tax_templates:
-                for template in item_group_tax_templates:
-                    item_group_taxes = frappe.db.get_all(
-                        'Item Tax Template Detail', filters={'parent': template['item_tax_template']},
-                        fields=['tax_type', 'tax_rate']
-                    )
-                    group_tax[group['name']] = item_group_taxes
-            else:
-                group_tax[group['name']] = []
 
-        # Enrich each item with barcode details, stock counts, prices, and tax templates
-        for item in items:
-            # Get barcode details and inject price into each barcode based on uom
-            item['barcode_details'] = barcode_dict.get(item['name'], [])
-            for barcode_detail in item['barcode_details']:
-                barcode_detail['price'] = price_lookup.get(item['item_code'], {}).get(barcode_detail['uom'], None)
 
-            # Assign tax information based on item group or specific item tax template
-            if item['item_group'] in group_tax and group_tax[item['item_group']]:
-                item['taxes'] = group_tax[item['item_group']]
-            else:
-                tax_type = frappe.get_all('Item Tax', filters={'parent': item['item_code']}, fields=['item_tax_template'])
-                item['taxes'] = tax_template_dict.get(tax_type[0]['item_tax_template'], []) if tax_type else []
-
-            # Get stock count (default to 0 if not found)
-            item['stock_count'] = stock_count_dict.get(item['item_code'], 0)
-
-        return {
+			if item['item_code'] in item_lookup:
+				item['price'] = round(item_lookup[item['item_code']],2)
+			try:
+				if item['item_group'] in group_tax and group_tax[item['item_group']]:
+					item['taxes'] = group_tax[item['item_group']]
+				else :
+					tax_type = frappe.get_all('Item Tax', filters={'parent': item['item_code']}, fields=['item_tax_template'])
+					item['taxes'] = tax_template_dict.get(tax_type[0]['item_tax_template'], [])
+			except Exception as e:
+				item['taxes'] = []  # Handle missing taxes or errors
+			item['stock_count'] = stock_count_dict.get(item['item_code'], 0)  # Default to 0 if no stock found
+		return {
             'items': items
         }
-
-    except Exception as e:
-        frappe.log_error(frappe.get_traceback(), _("Failed to fetch Items with Tax Template"))
-        frappe.throw(_("An error occurred while fetching Items with Tax Template"))
+	except Exception as e:
+		frappe.log_error(frappe.get_traceback(), _("Failed to fetch Items with Tax Template"))
+		frappe.throw(_("An error occurred while fetching Items with Tax Template"))
 
 
 
