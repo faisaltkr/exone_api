@@ -76,9 +76,14 @@ def get_items_with_tax_template():
 		item_tax_templates = frappe.get_all('Item Tax Template Detail',fields=['parent AS item_tax_template', 'tax_type', 'tax_rate'])
 		stock_counts = frappe.get_all('Bin', fields=['item_code', 'actual_qty'], filters={'item_code': ['in', [item['item_code'] for item in items]]})
 		stock_count_dict = {stock['item_code']: stock['actual_qty'] for stock in stock_counts}
+		barcodes = frappe.get_all('Item Barcode',fields=['parent','barcode','barcode_type','uom'])
+		barcode_dict = {barcode['parent']: {
+			'barcode':barcode['barcode'],'barcode_type':barcode['barcode_type'],'uom':barcode['uom'] }for barcode in barcodes}
+		print(barcode_dict,"sddss")
+
+
 		tax_template_dict = {}
 		for template in item_tax_templates:
-			print(template,"template")
 			if template['item_tax_template'] not in tax_template_dict:
 				tax_template_dict[template['item_tax_template']] = []
 			tax_template_dict[template['item_tax_template']].append({
@@ -120,21 +125,8 @@ def get_items_with_tax_template():
 
 			else:
 				group_tax[group['name']] = []
-		print(group_tax)
 		for item in items:
-
-			# print(item_group_tax_template)
-			# if item_group_tax_template and item_group_tax_template[0].get('item_tax_template'):
-			# 	item['taxes'] = tax_template_dict.get(item_group_tax_template[0]['item_tax_template'], [])
-			# 	print(item['taxes'],"ddddd")
-			# else:
-			# 	tax_type = frappe.get_all('Item Tax', filters={'parent': item['item_code']}, fields=['item_tax_template'])
-			# 	if tax_type:
-			# 		item['taxes'] = tax_template_dict.get(tax_type[0]['item_tax_template'], [])
-			# 	else:
-					# item['taxes'] = []  # No taxes found
-
-
+			item['barcode_details'] = barcode_dict.get(item['name'],{})
 
 			if item['item_code'] in item_lookup:
 				item['price'] = round(item_lookup[item['item_code']],2)
