@@ -175,9 +175,6 @@ def get_items_with_tax_template():
 		frappe.log_error(frappe.get_traceback(), _("Failed to fetch Items with Tax Template"))
 		frappe.throw(_("An error occurred while fetching Items with Tax Template"))
 
-
-
-
 # @frappe.whitelist()
 # def get_pos_profile_and_printer_configs():
 #     # Fetch POS Profiles along with Applicable Users and Payment Methods
